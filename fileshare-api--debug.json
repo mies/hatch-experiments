@@ -1,0 +1,94 @@
+{
+  "apiKey": "REDACTED",
+  "cwd": "/Users/mies/p/hatch-experiments",
+  "packageManager": "npm",
+  "messages": [
+    {
+      "id": "qd3oy92zmbm",
+      "content": " a filesharing/file uload api",
+      "role": "user",
+      "parts": [
+        {
+          "type": "text",
+          "text": " a filesharing/file uload api"
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "id": "msg-sWL4vNKOMgddI8K0FcIWfo7E",
+      "createdAt": "2025-03-22T18:00:11.019Z",
+      "content": "Great! Let's start by understanding the basic functionality you want for this file-sharing/upload API. \n\nWhat types of files do you expect users to upload, and are there any size limits or restrictions on these files?",
+      "toolInvocations": [],
+      "parts": [
+        {
+          "type": "text",
+          "text": "Great! Let's start by understanding the basic functionality you want for this file-sharing/upload API. \n\nWhat types of files do you expect users to upload, and are there any size limits or restrictions on these files?"
+        }
+      ]
+    },
+    {
+      "id": "ra7bjwej9nn",
+      "content": "images and pdfs, 2gb max upload size",
+      "role": "user",
+      "parts": [
+        {
+          "type": "text",
+          "text": "images and pdfs, 2gb max upload size"
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "id": "msg-KG3U4KDIpikSzM93YsjIlYml",
+      "createdAt": "2025-03-22T18:00:20.353Z",
+      "content": "Thanks for the details. For handling file uploads, we'll need a storage solution. Given the file types and size limit, Cloudflare R2 would be a suitable choice for scalable and cost-effective object storage.\n\nNext, let's consider user access. Do you want to implement user authentication so that only registered users can upload and access files, or is this open to anyone?",
+      "toolInvocations": [],
+      "parts": [
+        {
+          "type": "text",
+          "text": "Thanks for the details. For handling file uploads, we'll need a storage solution. Given the file types and size limit, Cloudflare R2 would be a suitable choice for scalable and cost-effective object storage.\n\nNext, let's consider user access. Do you want to implement user authentication so that only registered users can upload and access files, or is this open to anyone?"
+        }
+      ]
+    },
+    {
+      "id": "ypj9rlaa0cb",
+      "content": "the api can be open but I do want users to leave their email so we can send them an email",
+      "role": "user",
+      "parts": [
+        {
+          "type": "text",
+          "text": "the api can be open but I do want users to leave their email so we can send them an email"
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "id": "msg-jXCv0DbxtDXmdrazphYwx0Pr",
+      "createdAt": "2025-03-22T18:00:32.780Z",
+      "content": "Got it. Since you want users to provide their email addresses, we can use this information to send them notifications or confirmations. For sending emails, we can use Resend.\n\nNow, regarding the file uploads, do you want to generate any kind of unique link or token for each uploaded file that users can use to access or share the file later?",
+      "toolInvocations": [],
+      "parts": [
+        {
+          "type": "text",
+          "text": "Got it. Since you want users to provide their email addresses, we can use this information to send them notifications or confirmations. For sending emails, we can use Resend.\n\nNow, regarding the file uploads, do you want to generate any kind of unique link or token for each uploaded file that users can use to access or share the file later?"
+        }
+      ]
+    },
+    {
+      "id": "jxhzjia45bb",
+      "content": " yes unique link that expires after two weeks",
+      "role": "user",
+      "parts": [
+        {
+          "type": "text",
+          "text": " yes unique link that expires after two weeks"
+        }
+      ]
+    }
+  ],
+  "specPath": "/Users/mies/p/hatch-experiments/fileshare-api.md",
+  "specName": "Filesharing & File Upload API",
+  "specContent": "# Filesharing & File Upload API Implementation Plan\n\nThis document provides detailed implementation instructions for a file upload and sharing API using Cloudflare Workers and Hono. The API will allow users to upload images and PDFs (up to 2GB) and receive an email with a unique link that expires after two weeks. Files will be stored in Cloudflare R2, and metadata will be stored in Cloudflare D1 using Drizzle as the ORM. Email delivery will be handled by Resend.\n\n---\n\n## 1. Technology Stack\n\n- **Backend Framework:** Hono (TypeScript API framework similar to Express.js)\n- **Edge Runtime:** Cloudflare Workers\n- **Object Storage:** Cloudflare R2\n- **Database:** Cloudflare D1 (with Drizzle as the type-safe SQL query builder/ORM)\n- **Email Service:** Resend\n\n---\n\n## 2. API Endpoints\n\n### a. POST /upload\n\n- **Purpose:** Accept file uploads (images and PDFs) along with a user email.\n- **Payload:** Multipart form-data containing:\n  - File (validated to be an image or PDF, with max size 2GB)\n  - Email (string)\n\n- **Process:**\n  1. Validate provided file:\n     - Check MIME type for images (i.e. image/jpeg, image/png, etc.) and application/pdf for PDFs.\n     - Enforce the 2GB max size limit.\n  2. Generate a unique identifier/token for the file. Use a UUID or similar random token.\n  3. Determine an expiration timestamp, two weeks from the upload time.\n  4. Upload the file to Cloudflare R2 using a predefined bucket binding (e.g., the R2 bucket can be accessed via environment variable binding from wrangler.toml).\n  5. Insert a record into the Cloudflare D1 database containing file metadata:\n     - ID (unique token)\n     - Email\n     - Original file name\n     - MIME type\n     - File size\n     - Upload timestamp\n     - Expiration timestamp\n  6. Generate a unique file access URL (e.g. https://yourdomain.com/file/{ID}).\n  7. Use Resend to send an email to the provided address containing the unique file access URL and any additional instructions.\n  8. Return a JSON response with details about the upload and the URL.\n\n### b. GET /file/:id\n\n- **Purpose:** Retrieve the file if the link has not expired.\n- **Process:**\n  1. Accept the unique file identifier as a URL parameter.\n  2. Query the Cloudflare D1 database (using Drizzle) to get metadata for the file.\n  3. Check if the current timestamp is before the expiration timestamp.\n  4. If valid, fetch the file from Cloudflare R2 and stream it back to the user.\n  5. If expired, return an error message or status indicating that the link is no longer valid.\n\n---\n\n## 3. Database Schema\n\nUsing Drizzle, define a table (e.g., `files`) with the following fields:\n\n- id: string (primary key)\n- email: string\n- original_filename: string\n- mime_type: string\n- file_size: number\n- upload_timestamp: datetime\n- expiration_timestamp: datetime\n- r2_object_key: string (the key used to store/retrieve file from Cloudflare R2)\n\n---\n\n## 4. Email Integration\n\n- **Service:** Resend\n- **Flow:** Upon successful upload, trigger a function to send an email to the user.\n  - Email content should include:\n    - A friendly message confirming the file upload.\n    - The unique download link (e.g. https://yourdomain.com/file/{id}).\n    - Information that the link will expire in two weeks.\n\n---\n\n## 5. Cloudflare Workers Setup\n\n- Create a new Cloudflare Worker project using Wrangler.\n- Configure environment bindings:\n  - Bind the Cloudflare R2 bucket in `wrangler.toml` (e.g., `BUCKET_NAME`).\n  - Bind Cloudflare D1 database connection.\n  - Any secret keys required for Resend (API key) should be injected via environment secrets.\n\nExample snippet for wrangler.toml:\n\n```\nname = \"filesharing-api\"\nmain = \"dist/index.js\"\n\n[triggers]\n  crons = []\n\n[vars]\n  RESEND_API_KEY = \"your-resend-api-key\"\n\n[[r2_buckets]]\n  binding = \"R2_BUCKET\"\n  bucket_name = \"your-bucket-name\"\n\n[[d1_databases]]\n  binding = \"D1_DB\"\n  database_name = \"filesharing_db\"\n```\n\n---\n\n## 6. Implementation Considerations\n\n- **File Validation:**\n  - Implement robust error-handling for oversized or unsupported file types.\n  - Return descriptive error messages if validation fails.\n\n- **Security:**\n  - Ensure that the file upload process does not allow executable code injection.\n  - Use secure random generation for file tokens.\n  - Validate and sanitize email addresses.\n\n- **Performance:**\n  - Consider streaming file uploads for better memory management when handling large files.\n  - Use proper caching headers when serving files if applicable.\n\n- **Maintenance:**\n  - Plan for a cleanup job (e.g. a scheduled Cloudflare Worker) that removes expired file records from D1 and deletes the corresponding objects in R2.\n\n- **Logging & Monitoring:**\n  - Add logging for uploads, email sending, and file retrieval.\n  - Integrate monitoring/alerting based on Cloudflare’s metrics or external logging services.\n\n---\n\n## 7. Testing\n\n- Write unit tests for individual endpoints using a testing framework (e.g., Mocha or Jest for Worker projects).\n- Integration tests for file upload and retrieval process.\n- Test email delivery with Resend in a staging environment.\n- Validate that expired links are handled correctly.\n\n---\n\n## 8. Deployment\n\n- Use Wrangler to deploy to Cloudflare Workers.\n- Ensure environmental variables are correctly set in production.\n- Validate endpoint functionality post-deployment.\n\n---\n\n## 9. Summary\n\nThis implementation plan covers the creation of a file upload API with email notifications and unique access links that expire after two weeks. It uses Cloudflare Workers with the Hono framework, Cloudflare R2 for file storage, Cloudflare D1 with Drizzle for metadata persistence, and Resend for email notifications. Follow the outlined steps to ensure a robust, secure, and maintainable implementation.\n\nHappy coding!",
+  "sessionId": "kclz57p1k6s"
+}
